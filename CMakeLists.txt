@@ -17,6 +17,8 @@ target_compile_options(cxxgen PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
+set_target_properties(cxxgen PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_features(cxxgen PRIVATE cxx_std_20)
 if(MSVC)
     target_compile_options(cxxgen PRIVATE $<$<CONFIG:Debug>:-Od>)
 else()

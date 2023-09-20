@@ -10,57 +10,49 @@
 
 #include "fmt/format.h"
 
-#include <fstream>
-
 using namespace clang;
 using namespace clang::ast_matchers;
 
-struct OnMatchCXXRecord : MatchFinder::MatchCallback {
-  void run(const MatchFinder::MatchResult &Res) override {
-    auto RecDef = Res.Nodes.getNodeAs<CXXRecordDecl>("cxxdef");
-    auto RecDeclName = RecDef->getDeclName().getAsString();
-    auto RecType =
-        RecDef->getASTContext().getTypeInfo(RecDef->getTypeForDecl());
+struct DisplayMatchee : MatchFinder::MatchCallback {
+  void run(const MatchFinder::MatchResult &Res) override;
+};
 
-    fmt::println("Catch CXXRecordDeclare: {}, size: {}", //
-                 RecDeclName, RecType.Width / 8);
+struct PrintCodeGen : MatchFinder::MatchCallback {
+  PrintCodeGen(StringRef FName) : FileName(FName) {}
 
-    for (auto Field : RecDef->fields()) {
-      auto DeclName = Field->getDeclName().getAsString();
-      auto FieldType = Field->getType();
-      auto TypeName = Field->getType().getAsString();
-      auto FieldTypeInfo = RecDef->getASTContext().getTypeInfo(FieldType);
+  StringRef FileName;
+  std::vector<const CXXRecordDecl *> RecDecls;
 
-      fmt::println(" - Field: {}, type: {:8}, byte size: {:3}", //
-                   DeclName, TypeName, FieldTypeInfo.Width / 8);
-    }
-  }
+  void run(const MatchFinder::MatchResult &Res) override;
 };
 
 struct AnaDeclConsumer : ASTConsumer {
-  AnaDeclConsumer(StringRef Target) {
+  AnaDeclConsumer(StringRef Target, StringRef File) : DisplayGen(File) {
     DeclarationMatcher RecordDeclMatcher =
         cxxRecordDecl(isDefinition(), hasName(Target)).bind("cxxdef");
 
-    Finder.addMatcher(RecordDeclMatcher, &RecordCallback);
+    Finder.addMatcher(RecordDeclMatcher, &Displayer);
+    Finder.addMatcher(RecordDeclMatcher, &DisplayGen);
   }
   void HandleTranslationUnit(ASTContext &Ctx) override { Finder.matchAST(Ctx); }
 
 private:
   MatchFinder Finder;
-  OnMatchCXXRecord RecordCallback;
+  DisplayMatchee Displayer;
+  PrintCodeGen DisplayGen;
 };
 
 class DeclFindingAction : public clang::ASTFrontendAction {
 public:
-  DeclFindingAction(std::string Target) : TargetClassName(std::move(Target)) {}
+  DeclFindingAction(std::string Target, std::string File)
+      : TargetClassName(std::move(Target)), FileName(std::move(File)) {}
 
   std::unique_ptr<clang::ASTConsumer>
   CreateASTConsumer(clang::CompilerInstance &CI, clang::StringRef) final {
-    return std::unique_ptr<clang::ASTConsumer>(
-        new AnaDeclConsumer(TargetClassName));
+    return std::make_unique<AnaDeclConsumer>(TargetClassName, FileName);
   }
 
 private:
   std::string TargetClassName;
+  std::string FileName;
 };
