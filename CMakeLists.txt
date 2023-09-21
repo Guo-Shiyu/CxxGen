@@ -8,9 +8,12 @@ cmake_policy(SET CMP0091 NEW)
 project(cxxgen LANGUAGES CXX C)
 
 # target
-add_executable(cxxgen "")
+add_library(cxxgen STATIC "")
 set_target_properties(cxxgen PROPERTIES OUTPUT_NAME "cxxgen")
-set_target_properties(cxxgen PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/linux/x86_64/debug")
+set_target_properties(cxxgen PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/linux/x86_64/debug")
+target_include_directories(cxxgen PRIVATE
+    src
+)
 target_compile_options(cxxgen PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-m64>
     $<$<COMPILE_LANGUAGE:CXX>:-m64>
@@ -45,7 +48,100 @@ target_link_options(cxxgen PRIVATE
     -m64
 )
 target_sources(cxxgen PRIVATE
-    src/main.cpp
     src/matcher.cpp
+)
+
+# target
+add_executable(cxxgen-arrow "")
+set_target_properties(cxxgen-arrow PROPERTIES OUTPUT_NAME "cxxgen-arrow")
+set_target_properties(cxxgen-arrow PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/linux/x86_64/debug")
+add_dependencies(cxxgen-arrow cxxgen)
+target_include_directories(cxxgen-arrow PRIVATE
+    src
+)
+target_compile_options(cxxgen-arrow PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:-m64>
+    $<$<COMPILE_LANGUAGE:CXX>:-m64>
+    $<$<COMPILE_LANGUAGE:C>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+)
+set_target_properties(cxxgen-arrow PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_features(cxxgen-arrow PRIVATE cxx_std_20)
+if(MSVC)
+    target_compile_options(cxxgen-arrow PRIVATE $<$<CONFIG:Debug>:-Od>)
+else()
+    target_compile_options(cxxgen-arrow PRIVATE -O0)
+endif()
+if(MSVC)
+    target_compile_options(cxxgen-arrow PRIVATE -Zi)
+else()
+    target_compile_options(cxxgen-arrow PRIVATE -g)
+endif()
+if(MSVC)
+    set_property(TARGET cxxgen-arrow PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+target_link_libraries(cxxgen-arrow PRIVATE
+    cxxgen
+    clang-cpp
+    fmt
+)
+target_link_directories(cxxgen-arrow PRIVATE
+    /usr/local/lib
+    /usr/lib
+    build/linux/x86_64/debug
+)
+target_link_options(cxxgen-arrow PRIVATE
+    -m64
+)
+target_sources(cxxgen-arrow PRIVATE
+    src/bin/arrow.cpp
+)
+
+# target
+add_executable(cxxgen-display "")
+set_target_properties(cxxgen-display PROPERTIES OUTPUT_NAME "cxxgen-display")
+set_target_properties(cxxgen-display PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/linux/x86_64/debug")
+add_dependencies(cxxgen-display cxxgen)
+target_include_directories(cxxgen-display PRIVATE
+    src
+)
+target_compile_options(cxxgen-display PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:-m64>
+    $<$<COMPILE_LANGUAGE:CXX>:-m64>
+    $<$<COMPILE_LANGUAGE:C>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+)
+set_target_properties(cxxgen-display PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_features(cxxgen-display PRIVATE cxx_std_20)
+if(MSVC)
+    target_compile_options(cxxgen-display PRIVATE $<$<CONFIG:Debug>:-Od>)
+else()
+    target_compile_options(cxxgen-display PRIVATE -O0)
+endif()
+if(MSVC)
+    target_compile_options(cxxgen-display PRIVATE -Zi)
+else()
+    target_compile_options(cxxgen-display PRIVATE -g)
+endif()
+if(MSVC)
+    set_property(TARGET cxxgen-display PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+target_link_libraries(cxxgen-display PRIVATE
+    cxxgen
+    clang-cpp
+    fmt
+)
+target_link_directories(cxxgen-display PRIVATE
+    /usr/local/lib
+    /usr/lib
+    build/linux/x86_64/debug
+)
+target_link_options(cxxgen-display PRIVATE
+    -m64
+)
+target_sources(cxxgen-display PRIVATE
+    src/bin/display.cpp
 )
 

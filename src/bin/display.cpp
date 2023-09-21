@@ -1,5 +1,4 @@
-#include "matcher.h"
-#include "preprocess.h"
+#include "entry.h"
 
 struct GenState {
   constexpr static auto kFixedHeader = R"(
@@ -20,64 +19,64 @@ void __display_all(Generator<T> s) {
 
 )";
 
-  GenState(StringRef FileName) {
+  GenState(StringRef fileName) {
     FwdDecls.push_back(fmt::format("#include \"{}\" \n#include <iostream> \n",
-                                   FileName.data()));
+                                   fileName.data()));
     FwdDecls.push_back(kFixedHeader);
   }
 
   std::list<std::string> FwdDecls, FieldDisplayers;
 
-  void visitField(const FieldDecl *Field, std::list<std::string> &Buf) {
-    auto FieldName = Field->getName().data();
-    auto FieldType = Field->getType();
-    auto TypeName = Field->getType().getAsString();
+  void visitField(const FieldDecl *field, std::list<std::string> &buf) {
+    auto FieldName = field->getName().data();
+    auto FieldType = field->getType();
+    auto TypeName = field->getType().getAsString();
     auto FieldTypeInfo =
-        Field->getParent()->getASTContext().getTypeInfo(FieldType);
+        field->getParent()->getASTContext().getTypeInfo(FieldType);
 
     if (FieldType->isBuiltinType()) {
-      Buf.push_back(
+      buf.push_back(
           fmt::format("std::cout << \"{0}({1}):\" << _p->{0} << \", \"; ",
                       FieldName, TypeName));
     }
 
-    if (const EnumType *Ety = Field->getType()->getAs<EnumType>()) {
+    if (const EnumType *Ety = field->getType()->getAs<EnumType>()) {
       EnumDecl *Decl = Ety->getDecl();
       visitEnum(Decl);
-      Buf.push_back(fmt::format("__display<{}>(_p->{});", //
+      buf.push_back(fmt::format("__display<{}>(_p->{});", //
                                 TypeName, FieldName));
       return;
     }
 
     if (FieldType->isRecordType() and not FieldType->isUnionType()) {
-      Buf.push_back(
+      buf.push_back(
           fmt::format("__display<{}*>(&_p->{});", TypeName, FieldName));
       return;
     }
 
     if (FieldType->isRecordType() and FieldType->isUnionType()) {
       auto UCName = FieldType->getAsCXXRecordDecl()->getName().data();
-      Buf.push_back(fmt::format("__display<{}*>(&_p->{});", UCName, FieldName));
+      buf.push_back(fmt::format("__display<{}*>(&_p->{});", UCName, FieldName));
       return;
     }
 
     if (FieldType->isArrayType()) {
       auto ElemTy = FieldType->getAsArrayTypeUnsafe()->getElementType();
       if (ElemTy->isBuiltinType()) {
-        Buf.push_back(fmt::format(
+        buf.push_back(fmt::format(
             "for (auto& v : _p->{}) {{std::cout << v << \", \";}}", FieldName));
       } else if (ElemTy->isRecordType()) {
-        Buf.push_back(fmt::format(
+        buf.push_back(fmt::format(
             "for (auto& v : _p->{}) {{__display<{}*>(&v);}}", FieldName,
             ElemTy->getAsRecordDecl()->getName().data()));
       }
     }
   }
 
-  void visitCxxRecord(const CXXRecordDecl *RecDef) {
-    auto TypeName = RecDef->getName().data();
+  void visitCxxRecord(const CXXRecordDecl *recDef) {
+    auto TypeName = recDef->getName().data();
     fmt::println("\n// Generating CXXRecord: {} at 0x{:x}...", //
-                 TypeName, reinterpret_cast<size_t>(RecDef));
+                 TypeName, reinterpret_cast<size_t>(recDef));
 
     FwdDecls.push_back(fmt::format(
         "template<> inline void __display<{0}*>({0}* _p); \n", TypeName));
@@ -88,7 +87,7 @@ void __display_all(Generator<T> s) {
                               "<< (size_t)_p << std::dec;",
                               TypeName));
 
-    for (auto Base : RecDef->bases()) {
+    for (auto Base : recDef->bases()) {
       auto BaseDecl = Base.getType()->getAsCXXRecordDecl();
       if (BaseDecl != nullptr) {
         for (auto *Field : BaseDecl->fields()) {
@@ -96,7 +95,7 @@ void __display_all(Generator<T> s) {
         }
       }
     }
-    for (auto *Field : RecDef->fields()) {
+    for (auto *Field : recDef->fields()) {
       visitField(Field, Buf);
     }
     Buf.push_back("std::cout << std::endl;\n}");
@@ -105,15 +104,15 @@ void __display_all(Generator<T> s) {
     FieldDisplayers = Buf;
   }
 
-  void visitEnum(const EnumDecl *EDecl) {
+  void visitEnum(const EnumDecl *eEDecl) {
     std::list<std::string> Buf;
 
-    auto EnumClassName = EDecl->getName().data();
+    auto EnumClassName = eEDecl->getName().data();
     Buf.push_back(fmt::format(
         "template<> inline void __display<{0}>({0} e) \n{{ \n  switch (e) \n{{",
         EnumClassName));
 
-    for (auto Enumral : EDecl->enumerators()) {
+    for (auto Enumral : eEDecl->enumerators()) {
       Buf.push_back(
           fmt::format("  case {0}::{1}: std::cout << \"{1}\" << ' '; break;",
                       EnumClassName, Enumral->getName().data()));
@@ -142,54 +141,40 @@ void __display_all(Generator<T> s) {
   ~GenState() { showGenn(); }
 };
 
-void traceRecords(const CXXRecordDecl *Rec,
-                  std::vector<const CXXRecordDecl *> &vec) {
-  vec.push_back(Rec);
-  for (auto *Field : Rec->fields()) {
-    auto FieldTy = Field->getType();
+struct DisplayGen : MatchFinder::MatchCallback {
+  DisplayGen(StringRef file) : FileName(file) {}
 
-    if (FieldTy->isRecordType()) {
-      traceRecords(FieldTy->getAsCXXRecordDecl(), vec);
+  StringRef FileName;
+  std::vector<const CXXRecordDecl *> RecDecls;
+
+  void run(const MatchFinder::MatchResult &res) override {
+    auto RecDef = res.Nodes.getNodeAs<CXXRecordDecl>("cxxdef");
+
+    // Record all class in defination
+    traceRecords(RecDef, RecDecls);
+
+    // generate
+    GenState GS(FileName);
+    for (auto *Rec : RecDecls) {
+      GS.visitCxxRecord(Rec);
     }
-
-    if (FieldTy->isArrayType()) {
-      auto ElemTy = FieldTy->getAsArrayTypeUnsafe()->getElementType();
-      if (ElemTy->isRecordType()) {
-        traceRecords(ElemTy->getAsCXXRecordDecl(), vec);
-      }
-    }
   }
-}
+};
 
-void PrintCodeGen::run(const MatchFinder::MatchResult &Res) {
-  auto RecDef = Res.Nodes.getNodeAs<CXXRecordDecl>("cxxdef");
+struct DisplayGenPass : ASTConsumer {
+  DisplayGenPass(StringRef target, StringRef file) : GenPass(file) {
+    DeclarationMatcher RecordDeclMatcher =
+        cxxRecordDecl(isDefinition(), hasName(target)).bind("cxxdef");
 
-  // Record all class in defination
-  traceRecords(RecDef, this->RecDecls);
-
-  // remove repeated class
-  std::sort(this->RecDecls.begin(), this->RecDecls.end());
-  auto last = std::unique(this->RecDecls.begin(), this->RecDecls.end());
-  this->RecDecls.erase(last, this->RecDecls.end());
-  std::reverse(this->RecDecls.begin(), this->RecDecls.end());
-
-  // generate
-  GenState GS(FileName);
-  for (auto *Rec : this->RecDecls) {
-    GS.visitCxxRecord(Rec);
+    Finder.addMatcher(RecordDeclMatcher, &Displayer);
+    Finder.addMatcher(RecordDeclMatcher, &GenPass);
   }
-}
+  void HandleTranslationUnit(ASTContext &Ctx) override { Finder.matchAST(Ctx); }
 
-int main(int argc, char **argv) {
-  if (argc >= 3) {
-    auto fileName = argv[1];
-    auto target = argv[2];
-    auto src = preprocess(target, fileName, argc >= 4);
+private:
+  MatchFinder Finder;
+  DisplayMatchee Displayer;
+  DisplayGen GenPass;
+};
 
-    bool status = clang::tooling::runToolOnCode(
-        std::make_unique<DeclFindingAction>(target, fileName), src, fileName);
-
-    // assert(status);
-    return 0;
-  }
-}
+int main(int argc, char *argv[]) { return entry<DisplayGenPass>(argc, argv); }

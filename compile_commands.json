@@ -1,11 +1,16 @@
 [
 {
   "directory": "/home/lucas/github/CxxGen",
-  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-g", "-O0", "-std=c++20", "-fno-rtti", "-o", "build/.objs/cxxgen/linux/x86_64/debug/src/main.cpp.o", "src/main.cpp"],
-  "file": "src/main.cpp"
+  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-g", "-O0", "-std=c++20", "-Isrc", "-fno-rtti", "-o", "build/.objs/cxxgen-display/linux/x86_64/debug/src/bin/display.cpp.o", "src/bin/display.cpp"],
+  "file": "src/bin/display.cpp"
 },
 {
   "directory": "/home/lucas/github/CxxGen",
-  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-g", "-O0", "-std=c++20", "-fno-rtti", "-o", "build/.objs/cxxgen/linux/x86_64/debug/src/matcher.cpp.o", "src/matcher.cpp"],
+  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-g", "-O0", "-std=c++20", "-Isrc", "-fno-rtti", "-o", "build/.objs/cxxgen-arrow/linux/x86_64/debug/src/bin/arrow.cpp.o", "src/bin/arrow.cpp"],
+  "file": "src/bin/arrow.cpp"
+},
+{
+  "directory": "/home/lucas/github/CxxGen",
+  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-g", "-O0", "-std=c++20", "-Isrc", "-fno-rtti", "-o", "build/.objs/cxxgen/linux/x86_64/debug/src/matcher.cpp.o", "src/matcher.cpp"],
   "file": "src/matcher.cpp"
 }]

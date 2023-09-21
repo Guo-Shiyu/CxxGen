@@ -1,5 +1,5 @@
 #include <cstddef>
-#include <iterator>
+#include <cstdint>
 
 enum class EnumCase {
   Bad,
@@ -16,7 +16,11 @@ struct SingleClass {
   int wow, owo;
 };
 
-struct Base {
+struct Meta {
+  double _x;
+};
+
+struct Base : Meta {
   int a, b;
 };
 
@@ -28,7 +32,7 @@ union U {
 struct Sub : public Base {
   double x, y;
   EnumCase k;
-  ArrayElem array[4];
   U u1, u2;
   SingleClass s;
+  int64_t pp, p2, p23;
 };

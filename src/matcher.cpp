@@ -1,7 +1,6 @@
 #include "matcher.h"
 
-
-void displayField(const FieldDecl *Field, size_t depth) {
+void displayField(const FieldDecl *field, size_t depth) {
   auto fixDepth = [](size_t d) {
     fmt::print("// ");
     for (int i = 0; i < d; i++) {
@@ -9,14 +8,14 @@ void displayField(const FieldDecl *Field, size_t depth) {
     }
   };
 
-  auto FieldType = Field->getType();
-  auto TypeName = Field->getType().getAsString();
+  auto FieldType = field->getType();
+  auto TypeName = field->getType().getAsString();
   auto FieldTypeInfo =
-      Field->getParent()->getASTContext().getTypeInfo(FieldType);
+      field->getParent()->getASTContext().getTypeInfo(FieldType);
 
   fixDepth(depth);
   fmt::println("Field: {:8}, type: {:8}, byte size: {:3}", //
-               Field->getName().data(), TypeName, FieldTypeInfo.Width / 8);
+               field->getName().data(), TypeName, FieldTypeInfo.Width / 8);
 
   if (const EnumType *Ety = FieldType->getAs<EnumType>()) {
     EnumDecl *Decl = Ety->getDecl();
@@ -43,18 +42,44 @@ void displayField(const FieldDecl *Field, size_t depth) {
   }
 }
 
-void displayCXXRecord(const CXXRecordDecl *RecDef) {
-  for (auto *Field : RecDef->fields()) {
+void displayCXXRecord(const CXXRecordDecl *recorddef) {
+  for (auto *Field : recorddef->fields()) {
     displayField(Field, 1);
   }
 }
 
-void DisplayMatchee::run(const MatchFinder::MatchResult &Res) {
-  auto RecDef = Res.Nodes.getNodeAs<CXXRecordDecl>("cxxdef");
+void DisplayMatchee::run(const MatchFinder::MatchResult &res) {
+  auto RecDef = res.Nodes.getNodeAs<CXXRecordDecl>("cxxdef");
   fmt::println("// Catch CXXRecordDeclare: {}",
                RecDef->getDeclName().getAsString());
   for (auto base : RecDef->bases()) {
     displayCXXRecord(base.getType()->getAsCXXRecordDecl());
   }
   displayCXXRecord(RecDef);
+}
+
+void traceRecords(const CXXRecordDecl *root,
+                  std::vector<const CXXRecordDecl *> &decls) {
+  decls.push_back(root);
+
+  for (auto *Field : root->fields()) {
+    auto FieldTy = Field->getType();
+
+    if (FieldTy->isRecordType()) {
+      traceRecords(FieldTy->getAsCXXRecordDecl(), decls);
+    }
+
+    if (FieldTy->isArrayType()) {
+      auto ElemTy = FieldTy->getAsArrayTypeUnsafe()->getElementType();
+      if (ElemTy->isRecordType()) {
+        traceRecords(ElemTy->getAsCXXRecordDecl(), decls);
+      }
+    }
+  }
+
+  // remove repeated class
+  std::sort(decls.begin(), decls.end());
+  auto last = std::unique(decls.begin(), decls.end());
+  decls.erase(last, decls.end());
+  std::reverse(decls.begin(), decls.end());
 }

@@ -17,42 +17,21 @@ struct DisplayMatchee : MatchFinder::MatchCallback {
   void run(const MatchFinder::MatchResult &Res) override;
 };
 
-struct PrintCodeGen : MatchFinder::MatchCallback {
-  PrintCodeGen(StringRef FName) : FileName(FName) {}
-
-  StringRef FileName;
-  std::vector<const CXXRecordDecl *> RecDecls;
-
-  void run(const MatchFinder::MatchResult &Res) override;
-};
-
-struct AnaDeclConsumer : ASTConsumer {
-  AnaDeclConsumer(StringRef Target, StringRef File) : DisplayGen(File) {
-    DeclarationMatcher RecordDeclMatcher =
-        cxxRecordDecl(isDefinition(), hasName(Target)).bind("cxxdef");
-
-    Finder.addMatcher(RecordDeclMatcher, &Displayer);
-    Finder.addMatcher(RecordDeclMatcher, &DisplayGen);
-  }
-  void HandleTranslationUnit(ASTContext &Ctx) override { Finder.matchAST(Ctx); }
-
-private:
-  MatchFinder Finder;
-  DisplayMatchee Displayer;
-  PrintCodeGen DisplayGen;
-};
-
+template <typename SubProcess>
 class DeclFindingAction : public clang::ASTFrontendAction {
 public:
-  DeclFindingAction(std::string Target, std::string File)
-      : TargetClassName(std::move(Target)), FileName(std::move(File)) {}
+  DeclFindingAction(std::string target, std::string file)
+      : TargetClassName(std::move(target)), FileName(std::move(file)) {}
 
   std::unique_ptr<clang::ASTConsumer>
-  CreateASTConsumer(clang::CompilerInstance &CI, clang::StringRef) final {
-    return std::make_unique<AnaDeclConsumer>(TargetClassName, FileName);
+  CreateASTConsumer(clang::CompilerInstance &CI, clang::StringRef _) final {
+    return std::make_unique<SubProcess>(TargetClassName, FileName);
   }
 
 private:
   std::string TargetClassName;
   std::string FileName;
 };
+
+void traceRecords(const CXXRecordDecl *root,
+                  std::vector<const CXXRecordDecl *> &decls);
