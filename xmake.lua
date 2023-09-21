@@ -2,14 +2,25 @@ add_rules("mode.debug", "mode.release")
 
 set_languages("c++20")
 
+add_includedirs("src/")
+add_cxflags("-fno-rtti")    
+
 target("cxxgen")
-    set_kind("binary")
+    set_kind("static")
     add_files("src/*.cpp")
     add_linkdirs("/usr/local/lib/", "/usr/lib/")
     add_links("clang-cpp",  "fmt")
 
-    add_cxflags("-fno-rtti")
+target("cxxgen-display")
+    set_kind("binary")
+    add_files("src/bin/display.cpp")
+    add_deps("cxxgen")
 
+target("cxxgen-arrow")
+    set_kind("binary")
+    add_files("src/bin/arrow.cpp")
+    add_deps("cxxgen")
+    
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --
