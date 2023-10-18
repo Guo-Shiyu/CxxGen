@@ -54,11 +54,11 @@ void __display_all(Generator<T> s) {
       return;
     }
 
-    if (FieldType->isRecordType() and FieldType->isUnionType()) {
-      auto UCName = FieldType->getAsCXXRecordDecl()->getName().data();
-      buf.push_back(fmt::format("__display<{}*>(&_p->{});", UCName, FieldName));
-      return;
-    }
+    // if (FieldType->isRecordType() and FieldType->isUnionType()) {
+    //   auto UCName = FieldType->getAsCXXRecordDecl()->getName().data();
+    //   buf.push_back(fmt::format("__display<{}*>(&_p->{});", UCName, FieldName));
+    //   return;
+    // }
 
     if (FieldType->isArrayType()) {
       auto ElemTy = FieldType->getAsArrayTypeUnsafe()->getElementType();

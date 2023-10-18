@@ -1,5 +1,8 @@
 #include "matcher.h"
 #include "preprocess.h"
+#include <clang/Lex/PreprocessingRecord.h>
+#include <cstddef>
+#include <string>
 
 template <typename FnPass> inline int entry(int argc, char **argv) {
   if (argc >= 3) {

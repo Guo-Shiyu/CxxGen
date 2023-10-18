@@ -1,8 +1,25 @@
 #include "entry.h"
-#include <clang/AST/Decl.h>
-#include <fmt/core.h>
-#include <functional>
-#include <llvm/ADT/StringRef.h>
+
+void formatCode(const std::string &code) {
+  std::string path = std::to_string((size_t)code.data());
+
+  // 将代码写入临时文件
+  std::ofstream out(path);
+  out << code;
+  out.close();
+
+  // 调用clang-format来格式化代码
+  auto cmd = fmt::format("clang-format -style=llvm -i {}", path);
+  std::system(cmd.c_str());
+
+  // 读取格式化后的代码
+  std::ifstream in(path);
+  std::string formattedCode((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+
+  // 输出格式化后的代码
+  llvm::outs() << formattedCode;
+}
 
 struct GenState {
   constexpr static auto kPrelude = R"(
@@ -42,23 +59,97 @@ template <typename T> struct Generator {
     }
 
     auto FDeclName = fieldDecl->getName();
+    auto FDeclTy = fieldDecl->getType();
 
-    if (fieldDecl->getType()->isArrayType() && fieldDecl->getType()
-                                                   ->getAsArrayTypeUnsafe()
-                                                   ->getElementType()
-                                                   ->isAnyCharacterType()) {
+    if (FDeclTy->isArrayType()) {
+      auto ArrTy = FDeclTy->getAsArrayTypeUnsafe();
+      auto ElemTy = ArrTy->getElementType();
+
+      // specialize for string type
+      if (ElemTy->isAnyCharacterType()) {
+        BuilderDecls.push_back(
+            fmt::format("// arrow::CTypeTraits<std::add_const_t<"
+                        "std::decay_t<decltype({0}::{1})>>>::"
+                        "BuilderType _{1}_b;\n arrow::CTypeTraits<const "
+                        "char*>::BuilderType _{1}_b;",
+                        recName.data(), FDeclName.data()));
+        // fall back to common path
+        goto COMMON;
+
+      } else if (ElemTy->isBuiltinType()) {
+        if (const auto *CAT =
+                dyn_cast<ConstantArrayType>(FDeclTy.getTypePtr())) {
+          auto Len = CAT->getSize().getZExtValue();
+
+          for (auto i = 1; i <= Len; i++) {
+            BuilderDecls.push_back(fmt::format(
+                "arrow::CTypeTraits<std::decay_t<decltype({0}::{1}[0])>"
+                ">::BuilderType _{1}_b_{2};",
+                recName.data(), FDeclName.data(), i));
+            BuilderDecls.push_back(fmt::format(R"(
+{{
+std::vector<std::decay_t<decltype({0}::{1}[0])>*> _map_{2};
+std::transform(_obj.begin(), _obj.end(), _map_{2}.begin(),
+                 [](auto o) {{ return &(o->{1}[{2}]); }});
+for (auto _p : _map_{2}) {{
+  _{1}_b_{2}.Append(*_p).ok();
+}}
+}}
+auto _{1}_f_{2} = _{1}_b_{2}.Finish().ValueOrDie();
+)",
+                                               recName.data(), FDeclName.data(),
+                                               i));
+
+            SchemaFieldDecls.push_back(
+                fmt::format(" arrow::field(\"{0}{2}\", _{1}_f_{2}->type()),",
+                            getMappedName(FDeclName), FDeclName.data(), i));
+
+            ColsDecl.push_back(fmt::format("_{0}_f_{1}", FDeclName.data(), i));
+          }
+
+        } else {
+          fmt::println("unreachable case, bad array type ");
+          ::exit(-1);
+        }
+
+      } else {
+        fmt::println("unsupport array type: {} of field: {}",
+                     fieldDecl->getName().data(), FDeclName.data());
+        ::exit(-1);
+      }
+
+      return;
+    } else if (FDeclTy->isAnyCharacterType()) {
+      // specialize for char
       BuilderDecls.push_back(
-          fmt::format("// arrow::CTypeTraits<std::add_const_t<"
-                      "std::decay_t<decltype({0}::{1})>>>::"
-                      "BuilderType _{1}_b;\n arrow::CTypeTraits<const "
-                      "char*>::BuilderType _{1}_b;",
+          fmt::format("arrow::CTypeTraits<const char *>::BuilderType _{1}_b;",
                       recName.data(), FDeclName.data()));
+      BuilderDecls.push_back(fmt::format(R"(
+{{
+std::vector<decltype({0}::{1})*> _map;
+std::transform(_obj.begin(), _obj.end(), _map.begin(),
+                 [](auto o) {{ return &(o->{1}); }});
+for (auto _p : _map) {{
+  _{1}_b.Append(std::string_view(_p, 1)).ok();
+}}
+}}
+auto _{1}_f = _{1}_b.Finish().ValueOrDie();
+)",
+                                         recName.data(), FDeclName.data()));
 
-    } else {
-      BuilderDecls.push_back(fmt::format(
-          "arrow::CTypeTraits<decltype({0}::{1})>::BuilderType _{1}_b;",
-          recName.data(), FDeclName.data()));
+      SchemaFieldDecls.push_back(
+          fmt::format(" arrow::field(\"{0}\", _{1}_f->type()),",
+                      getMappedName(FDeclName), FDeclName.data()));
+
+      ColsDecl.push_back(fmt::format("_{0}_f", FDeclName.data()));
+      return;
     }
+
+    BuilderDecls.push_back(fmt::format(
+        "arrow::CTypeTraits<decltype({0}::{1})>::BuilderType _{1}_b;",
+        recName.data(), FDeclName.data()));
+
+  COMMON:
 
     BuilderDecls.push_back(fmt::format(R"(
 {{
@@ -86,7 +177,7 @@ auto _{1}_f = _{1}_b.Finish().ValueOrDie();
     Header.push_back(fmt::format("#include \"{0}\"\n", File.data()));
     Header.push_back(kPrelude);
     Header.push_back(fmt::format(R"(
-auto __arrowgen(Generator<{0}> _g) {{
+auto inline __arrowgen(Generator<{0}> _g) {{
 
 std::vector<{0}*> _obj = {{}};
 for (auto *_p = _g.next(); _p != nullptr; _p = _g.next()) {{
@@ -122,25 +213,31 @@ for (auto *_p = _g.next(); _p != nullptr; _p = _g.next()) {{
   }
 
   void showGen() {
-    fmt::println("");
+    std::string buf;
+    buf.reserve(1024 * 128); // 128 kb
+
+    // buf.push_back(' ');
     for (auto &s : Header) {
-      fmt::println("{}", s);
+      buf.append(s);
     }
 
-    fmt::println("");
+    buf.push_back(' ');
     for (auto &s : BuilderDecls) {
-      fmt::println("{}", s);
+      buf.append(s);
     }
 
-    fmt::println("");
+    buf.push_back(' ');
     for (auto &s : SchemaFieldDecls) {
-      fmt::println("{}", s);
+      buf.append(s);
     }
 
-    fmt::println("");
+    buf.push_back(' ');
     for (auto &s : Footer) {
-      fmt::println("{}", s);
+      buf.append(s);
     }
+
+    formatCode(buf);
+    // llvm::outs() << buf;
   }
 
   ~GenState() { showGen(); }
@@ -163,8 +260,8 @@ struct ArrowGenPass : ASTConsumer {
     DeclarationMatcher RecordDeclMatcher =
         cxxRecordDecl(isDefinition(), hasName(Target)).bind("cxxdef");
 
-    Finder.addMatcher(RecordDeclMatcher, &Displayer);
     Finder.addMatcher(RecordDeclMatcher, &Generator);
+    Finder.addMatcher(RecordDeclMatcher, &Displayer);
   }
   void HandleTranslationUnit(ASTContext &Ctx) override { Finder.matchAST(Ctx); }
 

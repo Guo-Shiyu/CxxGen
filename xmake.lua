@@ -3,7 +3,7 @@ add_rules("mode.debug", "mode.release")
 set_languages("c++20")
 
 add_includedirs("src/")
-add_cxflags("-fno-rtti")    
+add_cxflags("-fno-rtti", "-g")    
 
 target("cxxgen")
     set_kind("static")

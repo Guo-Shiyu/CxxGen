@@ -19,6 +19,8 @@ target_compile_options(cxxgen PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-m64>
     $<$<COMPILE_LANGUAGE:C>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:C>:-g>
+    $<$<COMPILE_LANGUAGE:CXX>:-g>
 )
 set_target_properties(cxxgen PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_features(cxxgen PRIVATE cxx_std_20)
@@ -64,6 +66,8 @@ target_compile_options(cxxgen-arrow PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-m64>
     $<$<COMPILE_LANGUAGE:C>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:C>:-g>
+    $<$<COMPILE_LANGUAGE:CXX>:-g>
 )
 set_target_properties(cxxgen-arrow PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_features(cxxgen-arrow PRIVATE cxx_std_20)
@@ -111,6 +115,8 @@ target_compile_options(cxxgen-display PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-m64>
     $<$<COMPILE_LANGUAGE:C>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:C>:-g>
+    $<$<COMPILE_LANGUAGE:CXX>:-g>
 )
 set_target_properties(cxxgen-display PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_features(cxxgen-display PRIVATE cxx_std_20)
